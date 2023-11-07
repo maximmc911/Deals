@@ -1,79 +1,109 @@
-<template>
-  <EasyDataTable :headers="headers" hide-footer :items="items" @click-row="(item) => $router.push({ name: 'deals-details', params: { id: item.id } })
-    ">
-    <template #item-status="item">
-      <!--    <Button
-             :btn="false"
-             /> -->
-      <div class="flex py-3 pt-2">
-        <span :class="`${fillCorrectColor('info')} text-${'info'} rounded-full px-4 py-1 font-semibold text-sm`">
-          {{ 'Выбор рассрочки' }}
-        </span>
-
-      </div>
-    </template>
-  </EasyDataTable>
-  <TwPagination class="mt-10 tw-pagination" :current="current" :total="0" :per-page="10"
-    :text-before-input="$t('go_to_page')" :text-after-input="$t('forward')" @page-changed="changePagionation" />
-</template>
-  
 <script lang="ts" setup>
-import type { Header, Item } from "vue3-easy-data-table";
 import { formatCurrency, fillCorrectColor } from "@/mixins/features";
 import { reactive, ref } from "vue";
-const formatCurrency = (amount: number): string => {
-  // const roundedAmount = Math.round(amount * 100) / 100;
-  const roundedAmount = Math.floor(amount);
-  const formattedAmount = roundedAmount.toLocaleString();
-  const formattedCurrency = formattedAmount;
+import deals from "../../store/index";
+import { headers } from "../../constants";
+import { IDealParams, IDeal } from "../../interfaces/Deals";
+import { toast } from "vue3-toastify";
 
-  return formattedCurrency;
-}
-const paginationFilter = reactive({
+// constants
+const store = deals();
+const isLoading = ref<boolean>(false);
+const current = ref<number>(1);
+let autoList = ref<IDeal[]>([]);
+
+const filter = reactive<IDealParams>({
+  status: null,
   page_size: 10,
   page: 1,
 });
-const current = ref<number>(1);
+
+// functions
 const changePagionation = (e: number) => {
-  paginationFilter.page = e;
+  filter.page = e;
   current.value = e;
+  refresh(filter);
 };
 
-const headers: Header[] = [
-  { text: "ID", value: "id" },
-  { text: "ДАТА", value: "data" },
-  { text: "МОДЕЛЬ", value: "model" },
-  { text: "ГОС. НОМЕР", value: "gosNumber" },
-  { text: "ГОД/ЦВЕТ", value: "year" },
-  { text: "ЦЕНА БАНКА", value: "BankPrice" },
-  { text: "СТАТУС", value: "status" },
-];
+const refresh = async (filter: IDealParams) => {
+  isLoading.value = true;
 
-const items: Item[] = [
-  {
-    id: 1,
-    data: `25.09.2023`,
-    model: `Cobalt`,
-    gosNumber: `896J5654A`,
-    year: `2017 black`,
-    BankPrice: 2780000000,
-    status: `завершено`
-  },
-  {
-    id: 2,
-    data: `25 сентября 2023`,
-    model: `Cobalt`,
-    gosNumber: `896J5654A`,
-    year: `2017 black`,
-    BankPrice: 280000000,
-    status: `выбор рассрочки`
-  },
-];
-for (let index = 0; index < items.length; index++) {
-  items[index].BankPrice = formatCurrency(items[index].BankPrice)
-
-
-}
-
+  try {
+    await store.getDeals(filter);
+    autoList.value = store.dealsList.results;
+  } catch (error: any) {
+    toast.error(
+      error.response.data.msg || error.response.data.error || "Error"
+    );
+  }
+  isLoading.value = false;
+};
 </script>
-<style></style>
+<template>
+  <EasyDataTable
+    hide-footer
+    :headers="headers"
+    :loading="isLoading"
+    :items="store.dealsList.results || []"
+    @click-row="
+      (item) => $router.push({ name: 'deals-details', params: { id: item.id } })
+    ">
+    <template #empty-message>
+      <div class="dark:text-white">{{ $t("no_available_data") }}</div>
+    </template>
+
+    <template #header="header">
+      {{ $t(header.text).toUpperCase() }}
+    </template>
+
+    <template #item-car_model="item">
+      <div class="my-2 text-start">
+        {{ item.car_model.name }}
+      </div>
+    </template>
+
+    <template #item-yearAndColor="item">
+      <div class="my-2 text-start">
+        <span>
+          {{ item.year }}
+        </span>
+        /
+        <span>
+          {{ item.color }}
+        </span>
+      </div>
+    </template>
+
+    <template #item-car_number="item">
+      <div class="my-2 text-start">
+        {{ item.car_number.toUpperCase() }}
+      </div>
+    </template>
+
+    <template #item-price="item">
+      <div>
+        <span> {{ formatCurrency(item.price) }} сум </span>
+      </div>
+    </template>
+
+    <template #item-status="item">
+      <div class="flex py-3 pt-2">
+        <span
+          :class="`${fillCorrectColor(
+            'primary'
+          )} rounded-full px-4 py-1 font-semibold text-sm`">
+          {{ item.status || $t("not_specified") }}
+        </span>
+      </div>
+    </template>
+  </EasyDataTable>
+
+  <TwPagination
+    class="mt-10 tw-pagination"
+    :current="current"
+    :total="store.dealsList.count"
+    :per-page="10"
+    :text-before-input="$t('go_to_page')"
+    :text-after-input="$t('forward')"
+    @page-changed="changePagionation" />
+</template>
